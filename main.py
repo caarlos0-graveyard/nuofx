@@ -1,3 +1,4 @@
+import json
 import os
 import xml.etree.cElementTree as ET
 from datetime import datetime, timedelta
@@ -11,20 +12,36 @@ d60 = datetime.now() - timedelta(days=60)
 date_format = '%Y%m%d'
 cpf = os.environ['NU_CPF']
 pwd = os.environ['NU_PWD']
+test_file = os.environ['NU_TEST_FILE']
+statements = []
+balance = 0.00
 
-if cpf == "" or pwd == "":
-    print("missing cpf and/or password")
-    raise SystemExit()
+# used to test from a json file with the statements
+if test_file == "":
+    if cpf == "" or pwd == "":
+        print("missing cpf and/or password")
+        raise SystemExit()
 
-uuid, qr_code = nu.get_qr_code()
-qr_code.print_ascii(invert=True)
-input('scan and press enter...')
-nu.authenticate_with_qr_code(os.environ['NU_CPF'], os.environ['NU_PWD'], uuid)
+    uuid, qr_code = nu.get_qr_code()
+    qr_code.print_ascii(invert=True)
+    input('scan and press enter...')
+    nu.authenticate_with_qr_code(
+        os.environ['NU_CPF'],
+        os.environ['NU_PWD'],
+        uuid
+    )
 
-balance = nu.get_account_balance()
+    balance = nu.get_account_balance()
+    statements = nu.get_account_statements()
+else:
+    with open(test_file) as json_file:
+        statements = json.load(json_file)
+        balance = 1233.11
 
 print(f'creating 60-day OFX file of account with balance {balance}...')
 
+# here begins the uglyness
+# I'm extremely regretful right now
 ofx = ET.Element("OFX")
 
 signonmsgsrsv1 = ET.SubElement(ofx, "SIGNONMSGSRSV1")
@@ -58,7 +75,7 @@ banktranlist = ET.SubElement(stmtrs, "BANKTRANLIST")
 ET.SubElement(banktranlist, "DTSTART").text = d60.strftime(date_format)
 ET.SubElement(banktranlist, "DTEND").text = now
 
-for statement in nu.get_account_statements():
+for statement in statements:
     stmdate = datetime.strptime(statement["postDate"], '%Y-%m-%d')
 
     # ifnore if older than 60d
@@ -70,6 +87,7 @@ for statement in nu.get_account_statements():
 
     stm = ET.SubElement(banktranlist, "STMTTRN")
 
+    # TODO: maybe improve TRNTYPEs here
     if typename == 'TransferOutEvent' or typename == 'BarcodePaymentEvent' or typename == 'DebitPurchaseEvent':
         ET.SubElement(stm, "TRNTYPE").text = "DEBIT"
         ET.SubElement(stm, "TRNAMT").text = f'-{statement["amount"]}'
@@ -84,7 +102,7 @@ for statement in nu.get_account_statements():
     ET.SubElement(stm, "MEMO").text = memo
 
 ledgerbal = ET.SubElement(stmtrs, "LEDGERBAL")
-ET.SubElement(ledgerbal, "BALAMT").text = balance
+ET.SubElement(ledgerbal, "BALAMT").text = f'{balance}'
 ET.SubElement(ledgerbal, "DTASOF").text = now
 
 xmlstr = minidom.parseString(ET.tostring(ofx)).toprettyxml(indent="\t")
