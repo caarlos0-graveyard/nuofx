@@ -1,5 +1,6 @@
 FROM python:alpine
 WORKDIR /src
-COPY . /src
+COPY requirements.txt .
 RUN pip install -r requirements.txt
-ENTRYPOINT ["./run.sh"]
+COPY . /src
+ENTRYPOINT ["python", "main.py"]

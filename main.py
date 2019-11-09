@@ -1,22 +1,92 @@
+import os
+import xml.etree.cElementTree as ET
+from datetime import datetime, timedelta
+from xml.dom import minidom
+
 from pynubank import Nubank
 
 nu = Nubank()
+now = datetime.now().strftime('%Y%m%d')
+d60 = datetime.now() - timedelta(days=60)
+date_format = '%Y%m%d'
+cpf = os.environ['NU_CPF']
+pwd = os.environ['NU_PWD']
+
+if cpf == "" or pwd == "":
+    print("missing cpf and/or password")
+    raise SystemExit()
+
 uuid, qr_code = nu.get_qr_code()
-
 qr_code.print_ascii(invert=True)
-input('Após escanear o QRCode, pressione enter...')
-
+input('scan and press enter...')
 nu.authenticate_with_qr_code(os.environ['NU_CPF'], os.environ['NU_PWD'], uuid)
 
-f = open("extrato.csv","w+")
-f.write("account;desc;date;amount")
-for statement in nu.get_account_statements():
-	# hacky af but i dont care
-	typename = statement["__typename"]
-	if typename == 'TransferOutEvent' or typename == 'BarcodePaymentEvent' or typename == 'DebitPurchaseEvent':
-		sign = '-'
-	else:
-		sign = '+'
+balance = nu.get_account_balance()
 
-	f.write(f'NuConta;{statement["title"]} - {statement["detail"]};{statement["postDate"]};{sign}{statement["amount"]}')
-f.close()
+print(f'creating 60-day OFX file of account with balance {balance}...')
+
+ofx = ET.Element("OFX")
+
+signonmsgsrsv1 = ET.SubElement(ofx, "SIGNONMSGSRSV1")
+sonrs = ET.SubElement(signonmsgsrsv1, "SONRS")
+sonrsStatus = ET.SubElement(sonrs, "STATUS")
+ET.SubElement(sonrsStatus, "CODE").text = "0"
+ET.SubElement(sonrsStatus, "SEVERITY").text = "INFO"
+ET.SubElement(sonrs, "DTSERVER").text = now
+ET.SubElement(sonrs, "LANGUAGE").text = "POR"
+sonrsFI = ET.SubElement(sonrs, "FI")
+sonrsFIOrg = ET.SubElement(sonrsFI, "ORG").text = "NuBank"
+sonrsFID = ET.SubElement(sonrsFI, "FID").text = "260"
+
+bankmsgsrsv1 = ET.SubElement(ofx, "BANKMSGSRSV1")
+stmttrnrs = ET.SubElement(bankmsgsrsv1, "STMTTRNRS")
+ET.SubElement(stmttrnrs, "TRNUID").text = "1001"
+stmtstatus = ET.SubElement(stmttrnrs, "STATUS")
+ET.SubElement(stmtstatus, "CODE").text = "0"
+ET.SubElement(stmtstatus, "SEVERITY").text = "INFO"
+
+stmtrs = ET.SubElement(stmttrnrs, "STMTRS")
+ET.SubElement(stmtrs, "CURDEF").text = "BRL"
+
+bankacctfrom = ET.SubElement(stmtrs, "BANKACCTFROM")
+ET.SubElement(bankacctfrom, "BANKID").text = "260"
+ET.SubElement(bankacctfrom, "BRANCHID").text = "0001"
+ET.SubElement(bankacctfrom, "ACCTID").text = "1234"
+ET.SubElement(bankacctfrom, "ACCTTYPE").text = "CHECKING"
+
+banktranlist = ET.SubElement(stmtrs, "BANKTRANLIST")
+ET.SubElement(banktranlist, "DTSTART").text = d60.strftime(date_format)
+ET.SubElement(banktranlist, "DTEND").text = now
+
+for statement in nu.get_account_statements():
+    stmdate = datetime.strptime(statement["postDate"], '%Y-%m-%d')
+
+    # ifnore if older than 60d
+    if (datetime.now() - stmdate).days > 60:
+        continue
+
+    memo = f'{statement["title"]}: {statement["detail"]}'
+    typename = statement["__typename"]
+
+    stm = ET.SubElement(banktranlist, "STMTTRN")
+
+    if typename == 'TransferOutEvent' or typename == 'BarcodePaymentEvent' or typename == 'DebitPurchaseEvent':
+        ET.SubElement(stm, "TRNTYPE").text = "DEBIT"
+        ET.SubElement(stm, "TRNAMT").text = f'-{statement["amount"]}'
+    else:
+        ET.SubElement(stm, "TRNTYPE").text = "CREDIT"
+        ET.SubElement(stm, "TRNAMT").text = f'{statement["amount"]}'
+
+    ET.SubElement(stm, "DTPOSTED").text = stmdate.strftime(date_format)
+    ET.SubElement(stm, "FITID").text = statement["id"]
+    ET.SubElement(stm, "CHECKNUM").text = "260"
+    ET.SubElement(stm, "REFNUM").text = "260"
+    ET.SubElement(stm, "MEMO").text = memo
+
+ledgerbal = ET.SubElement(stmtrs, "LEDGERBAL")
+ET.SubElement(ledgerbal, "BALAMT").text = balance
+ET.SubElement(ledgerbal, "DTASOF").text = now
+
+xmlstr = minidom.parseString(ET.tostring(ofx)).toprettyxml(indent="\t")
+with open("/tmp/extrato.ofx", "w") as f:
+    f.write(xmlstr)
