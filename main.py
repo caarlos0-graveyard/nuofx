@@ -10,9 +10,9 @@ nu = Nubank()
 now = datetime.now().strftime('%Y%m%d')
 d60 = datetime.now() - timedelta(days=60)
 date_format = '%Y%m%d'
-cpf = os.environ['NU_CPF']
-pwd = os.environ['NU_PWD']
-test_file = os.environ['NU_TEST_FILE']
+cpf = os.getenv('NU_CPF', '')
+pwd = os.getenv('NU_PWD', '')
+test_file = os.getenv('NU_TEST_FILE', '')
 statements = []
 balance = 0.00
 
