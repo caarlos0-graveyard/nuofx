@@ -7,6 +7,7 @@ from xml.dom import minidom
 from pynubank import Nubank
 
 nu = Nubank()
+target = "/tmp/extrato.ofx"
 now = datetime.now().strftime('%Y%m%d')
 d60 = datetime.now() - timedelta(days=60)
 date_format = '%Y%m%d'
@@ -38,7 +39,8 @@ else:
         statements = json.load(json_file)
         balance = 1233.11
 
-print(f'creating 60-day OFX file of account with balance {balance}...')
+print(
+    f'creating 60-day OFX file of account with balance {balance} at {target}...')
 
 # here begins the uglyness
 # I'm extremely regretful right now
@@ -106,5 +108,5 @@ ET.SubElement(ledgerbal, "BALAMT").text = f'{balance}'
 ET.SubElement(ledgerbal, "DTASOF").text = now
 
 xmlstr = minidom.parseString(ET.tostring(ofx)).toprettyxml(indent="\t")
-with open("/tmp/extrato.ofx", "w") as f:
+with open(target, "w") as f:
     f.write(xmlstr)
