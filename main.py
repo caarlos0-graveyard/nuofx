@@ -7,7 +7,7 @@ from xml.dom import minidom
 from pynubank import Nubank
 
 nu = Nubank()
-target = "/tmp/extrato.ofx"
+target = "/tmp/extrato_nuconta.ofx"
 now = datetime.now().strftime('%Y%m%d')
 d60 = datetime.now() - timedelta(days=60)
 date_format = '%Y%m%d'
