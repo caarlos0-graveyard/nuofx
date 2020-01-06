@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import xml.etree.cElementTree as ET
 from datetime import datetime, timedelta
 from xml.dom import minidom
@@ -17,6 +18,16 @@ test_file = os.getenv('NU_TEST_FILE', '')
 statements = []
 balance = 0.00
 
+PAYMENT_EVENT_TYPES = (
+    'TransferOutEvent',
+    'TransferInEvent',
+    'TransferOutReversalEvent',
+    'BarcodePaymentEvent',
+    'DebitPurchaseEvent',
+    'DebitPurchaseReversalEvent',
+    'BillPaymentEvent',
+)
+
 # used to test from a json file with the statements
 if test_file == "":
     if cpf == "" or pwd == "":
@@ -33,7 +44,8 @@ if test_file == "":
     )
 
     balance = nu.get_account_balance()
-    statements = nu.get_account_statements()
+    statements = list(
+        filter(lambda x: x['__typename'] in PAYMENT_EVENT_TYPES, nu.get_account_feed()))
 else:
     with open(test_file) as json_file:
         statements = json.load(json_file)
@@ -84,13 +96,24 @@ for statement in statements:
     if (datetime.now() - stmdate).days > 60:
         continue
 
-    memo = f'{statement["title"]}: {statement["detail"]}'
     typename = statement["__typename"]
+    memo = f'{statement["title"]}: {statement["detail"]}'
+
+    if typename == 'BillPaymentEvent':
+        try:
+            statement["amount"] = re.search(
+                '.*R\$\s(\d.*)', memo).group(1).replace('.', '').replace(',', '.')
+            print(
+                f'INFO: found bill payment event value to be {statement["amount"]}')
+        except AttributeError:
+            print(
+                f'WARNING: Could not find bill payment event value for {memo}')
+            statement["amount"] = '0,00'
 
     stm = ET.SubElement(banktranlist, "STMTTRN")
 
     # TODO: maybe improve TRNTYPEs here
-    if typename == 'TransferOutEvent' or typename == 'BarcodePaymentEvent' or typename == 'DebitPurchaseEvent':
+    if typename == 'TransferOutEvent' or typename == 'BarcodePaymentEvent' or typename == 'DebitPurchaseEvent' or typename == 'BillPaymentEvent':
         ET.SubElement(stm, "TRNTYPE").text = "DEBIT"
         ET.SubElement(stm, "TRNAMT").text = f'-{statement["amount"]}'
     else:
