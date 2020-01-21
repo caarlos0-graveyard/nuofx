@@ -1,1 +1,1 @@
-pynubank===1.0.0
+pynubank===1.1.0
