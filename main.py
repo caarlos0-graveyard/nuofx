@@ -34,9 +34,13 @@ if test_file == "":
         print("missing cpf and/or password")
         raise SystemExit()
 
-    nu.authenticate(
+    uuid, qr_code = nu.get_qr_code()
+    qr_code.print_ascii(invert=True)
+    input('scan and press enter...')
+    nu.authenticate_with_qr_code(
         os.environ['NU_CPF'],
-        os.environ['NU_PWD']
+        os.environ['NU_PWD'],
+        uuid
     )
 
     balance = nu.get_account_balance()
