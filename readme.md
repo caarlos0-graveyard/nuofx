@@ -7,7 +7,7 @@ Export NuBank's _NuConta_ statements as an OFX file.
 Easiest way is using Docker:
 
 ```sh
-docker run --rm --it -e NU_CPF=xxxxx -e NU_PWD=xxxxx -v $PWD:/tmp caarlos0/nuofx
+docker run --rm -it -e NU_CPF=xxxxx -e NU_PWD=xxxxx -v $PWD:/tmp caarlos0/nuofx
 ```
 
 > `NU_CPF` should be your CPF, numbers only
