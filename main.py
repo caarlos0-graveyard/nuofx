@@ -10,7 +10,7 @@ from pynubank import Nubank
 nu = Nubank()
 target = "/tmp/extrato_nuconta.ofx"
 now = datetime.now().strftime('%Y%m%d')
-d60 = datetime.now() - timedelta(days=60)
+d90 = datetime.now() - timedelta(days=90)
 date_format = '%Y%m%d'
 cpf = os.getenv('NU_CPF', '')
 pwd = os.getenv('NU_PWD', '')
@@ -52,7 +52,7 @@ else:
         balance = 1233.11
 
 print(
-    f'creating 60-day OFX file of account with balance {balance} at {target}...')
+    f'creating 90-day OFX file of account with balance {balance} at {target}...')
 
 # here begins the uglyness
 # I'm extremely regretful right now
@@ -86,14 +86,14 @@ ET.SubElement(bankacctfrom, "ACCTID").text = "1234"
 ET.SubElement(bankacctfrom, "ACCTTYPE").text = "CHECKING"
 
 banktranlist = ET.SubElement(stmtrs, "BANKTRANLIST")
-ET.SubElement(banktranlist, "DTSTART").text = d60.strftime(date_format)
+ET.SubElement(banktranlist, "DTSTART").text = d90.strftime(date_format)
 ET.SubElement(banktranlist, "DTEND").text = now
 
 for statement in statements:
     stmdate = datetime.strptime(statement["postDate"], '%Y-%m-%d')
 
     # ifnore if older than 60d
-    if (datetime.now() - stmdate).days > 60:
+    if (datetime.now() - stmdate).days > 90:
         continue
 
     typename = statement["__typename"]
